@@ -207,11 +207,21 @@ fun StoreScreen() {
                             scope.launch {
                                 busy[a.id] = true
                                 try {
+                                    var problem: String? = null
                                     val reason = withContext(Dispatchers.IO) {
-                                        val apk = Installer.download(context, a, l, token)
-                                        SignatureCheck.blockingReason(context, a, apk)
+                                        var apk = Installer.download(context, a, l, token)
+                                        problem = SignatureCheck.apkProblem(context, apk)
+                                        if (problem != null) {
+                                            apk.delete()
+                                            apk = Installer.download(context, a, l, token)
+                                            problem = SignatureCheck.apkProblem(context, apk)
+                                        }
+                                        if (problem != null) null
+                                        else SignatureCheck.blockingReason(context, a, apk)
                                     }
-                                    if (reason != null) {
+                                    if (problem != null) {
+                                        toast("${a.name}: ${problem}")
+                                    } else if (reason != null) {
                                         conflict = Triple(a, l, reason)
                                     } else {
                                         withContext(Dispatchers.IO) {

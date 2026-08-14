@@ -50,6 +50,20 @@ object SignatureCheck {
         }
     }
 
+    /** APK が壊れていないか、署名されているかを確認する。問題があれば理由を返す */
+    fun apkProblem(context: Context, apk: File): String? {
+        if (!apk.exists() || apk.length() < 10000) return "APK のダウンロードが不完全です"
+        val info = try {
+            context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0)
+        } catch (e: Exception) {
+            null
+        } ?: return "APK を読み取れません（破損の可能性）"
+        if (certsOfApk(context, apk).isEmpty()) {
+            return "APK が署名されていません（" + info.packageName + "）"
+        }
+        return null
+    }
+
     /** 上書き可能なら null、不可能なら理由の説明を返す */
     fun blockingReason(context: Context, app: StoreApp, apk: File): String? {
         val installed = Catalog.installedPackage(context, app) ?: return null
