@@ -21,7 +21,7 @@ object Installer {
         if (!apk.exists() || apk.length() == 0L) {
             Github.downloadAsset(latest.assetUrl, token, apk)
         }
-        InstallLog.record(context, app.id, latest.tag)
+        InstallLog.markPending(context, app.id, latest.tag, InstallLog.versionOf(context, app))
         val uri = FileProvider.getUriForFile(context, "com.appathy.appstore.fileprovider", apk)
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
@@ -33,5 +33,14 @@ object Installer {
 
     fun clearCache(context: Context) {
         File(context.filesDir, "apks").deleteRecursively()
+    }
+
+    fun pruneCache(context: Context, keep: Map<String, String>) {
+        val dir = File(context.filesDir, "apks")
+        val files = dir.listFiles() ?: return
+        for (f in files) {
+            val ok = keep.any { (id, tag) -> f.name == "$id-$tag.apk" }
+            if (!ok) f.delete()
+        }
     }
 }

@@ -58,6 +58,15 @@ Android 11 (API 30) 以降のパッケージ可視性制限により、targetSdk
 AndroidManifest に QUERY_ALL_PACKAGES 権限と queries 要素を宣言して解決。
 Play ストア配布アプリではこの権限に審査上の制約があるが、本アプリは未公開配布なので問題ない。
 
+## v1.5 の変更（バグ修正3件）
+1. インストール記録のタイミング修正: 従来はダウンロード時に「入れた」と記録していたため、
+   OS の確認画面でキャンセルしても「最新」と表示される嘘があった。
+   markPending → 画面復帰時に versionCode の変化を確認してから record する方式に変更。
+   キャンセルなら記録されず、アンインストール検出時は pending も記録も消える。
+2. APK キャッシュ整理: filesDir/apks に旧版 APK が無限に溜まっていた。
+   カタログ再読込のたびに「各アプリの最新タグの APK」以外を削除する（pruneCache)。
+3. 起動高速化: 33本の Release 照会を直列 → async/awaitAll で並列化。
+
 ## 署名について（重要）
 Actions の Artifacts から手動で入れた APK は、CI が毎回生成する使い捨ての debug 鍵で署名されている。
 ストア配布版は共通鍵 ci/appathy.keystore で再署名されるため署名が一致せず、上書き更新できない。

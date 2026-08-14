@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -92,11 +94,20 @@ fun StoreScreen() {
                 profiles = profs
                 InstallLog.prune(context, list)
                 withContext(Dispatchers.IO) {
-                    for (a in list) {
-                        val l = runCatching { Catalog.latestFor(a, a.defaultChannel, token) }.getOrNull()
-                        latest[a.id] = l
-                        states[a.id] = Catalog.installState(context, a, l)
+                    kotlinx.coroutines.coroutineScope {
+                    list.map { a ->
+                        async {
+                            val l = runCatching { Catalog.latestFor(a, a.defaultChannel, token) }.getOrNull()
+                            latest[a.id] = l
+                            states[a.id] = Catalog.installState(context, a, l)
+                        }
+                    }.awaitAll()
                     }
+                    val keep = mutableMapOf<String, String>()
+                    for (a in list) {
+                        latest[a.id]?.let { keep[a.id] = it.tag }
+                    }
+                    Installer.pruneCache(context, keep)
                 }
             } catch (e: Exception) {
                 toast("カタログ取得に失敗: ${e.message}")
@@ -111,6 +122,7 @@ fun StoreScreen() {
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME && apps.isNotEmpty()) {
+                InstallLog.resolvePending(context, apps)
                 InstallLog.prune(context, apps)
                 for (a in apps) {
                     states[a.id] = Catalog.installState(context, a, latest[a.id])
