@@ -26,9 +26,17 @@ installedVersionName == tag から v を除いた文字列 → 最新。
 そのため各アプリの versionName とタグは揃える運用にする（v1.0.0 なら versionName 1.0.0）。
 揃っていないアプリは常に「更新あり」と出る。将来は versionCode 比較に強化する。
 
+## v1.1 の変更
+- インストール状態の判定を「ストアが記録したタグ」との比較に変更（InstallLog.kt）。
+  アプリ側 versionName とタグが揃っていなくても誤って「更新あり」と出ない。
+  記録が無いアプリ（ストア経由以外で入れたもの）は従来の versionName 比較にフォールバックする。
+  アンインストールされたアプリの記録は起動時に自動で消える（InstallLog.prune）。
+- 「まとめて」ボタン: catalog.json の profiles を選ぶと、未インストール/更新ありのアプリだけを
+  順にダウンロードしてインストーラを起動する。1本ごとに OS の確認画面が出るので、
+  画面上部に「3/12 アプリ名 を準備中」と進捗を表示し、2.5秒間隔で次に進む。
+
 ## ロードマップ（仕様確定済み）
-1. 一括インストール（catalog.json の profiles を使用）
-2. チャネル切替 UI（Stable / Beta / Nightly / Experimental をアプリごとにワンタップ）
+1. チャネル切替 UI（Stable / Beta / Nightly / Experimental をアプリごとにワンタップ）
 3. QR 共有（landingBaseUrl + ?app=ID&channel=CH の二段構え。GitHub Pages の着地ページが別途必要）
 4. ストア自身の自己更新（storeApkRepo の Release を照会）
 

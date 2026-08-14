@@ -6,12 +6,22 @@ import androidx.core.content.FileProvider
 import java.io.File
 
 object Installer {
+    fun download(context: Context, app: StoreApp, latest: LatestRelease, token: String): File {
+        val dir = File(context.filesDir, "apks")
+        val apk = File(dir, "${app.id}-${latest.tag}.apk")
+        if (!apk.exists() || apk.length() == 0L) {
+            Github.downloadAsset(latest.assetUrl, token, apk)
+        }
+        return apk
+    }
+
     fun downloadAndInstall(context: Context, app: StoreApp, latest: LatestRelease, token: String) {
         val dir = File(context.filesDir, "apks")
         val apk = File(dir, "${app.id}-${latest.tag}.apk")
         if (!apk.exists() || apk.length() == 0L) {
             Github.downloadAsset(latest.assetUrl, token, apk)
         }
+        InstallLog.record(context, app.id, latest.tag)
         val uri = FileProvider.getUriForFile(context, "com.appathy.appstore.fileprovider", apk)
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")

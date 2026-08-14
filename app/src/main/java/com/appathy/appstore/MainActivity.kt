@@ -71,6 +71,9 @@ fun StoreScreen() {
     var showSettings by remember { mutableStateOf(token.isBlank()) }
     var loading by remember { mutableStateOf(false) }
     var apps by remember { mutableStateOf(listOf<StoreApp>()) }
+    var profiles by remember { mutableStateOf(listOf<Profile>()) }
+    var showProfiles by remember { mutableStateOf(false) }
+    var bulk by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("すべて") }
     val latest = remember { mutableStateMapOf<String, LatestRelease?>() }
     val states = remember { mutableStateMapOf<String, InstallState>() }
@@ -83,8 +86,10 @@ fun StoreScreen() {
         scope.launch {
             loading = true
             try {
-                val list = withContext(Dispatchers.IO) { Catalog.fetch(token) }
+                val (list, profs) = withContext(Dispatchers.IO) { Catalog.fetch(token) }
                 apps = list
+                profiles = profs
+                InstallLog.prune(context, list)
                 withContext(Dispatchers.IO) {
                     for (a in list) {
                         val l = runCatching { Catalog.latestFor(a, a.defaultChannel, token) }.getOrNull()
@@ -106,6 +111,7 @@ fun StoreScreen() {
             TopAppBar(
                 title = { Text("Appathy Store") },
                 actions = {
+                    TextButton(onClick = { showProfiles = true }) { Text("まとめて") }
                     TextButton(onClick = { reload() }) { Text("更新") }
                     TextButton(onClick = { showSettings = true }) { Text("設定") }
                 }
@@ -121,6 +127,10 @@ fun StoreScreen() {
                 items(cats) { c ->
                     FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c) })
                 }
+            }
+            if (bulk.isNotBlank()) {
+                Text(bulk, Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                     style = MaterialTheme.typography.bodySmall)
             }
             if (loading) {
                 Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.Center) {
@@ -156,6 +166,47 @@ fun StoreScreen() {
                 }
             }
         }
+    }
+
+    if (showProfiles) {
+        AlertDialog(
+            onDismissRequest = { showProfiles = false },
+            title = { Text("まとめてインストール") },
+            text = {
+                Column {
+                    Text("未インストールのアプリだけを順に入れます。1本ごとに確認画面が出ます。")
+                    for (p in profiles) {
+                        val n = p.appIds.count { id ->
+                            states[id] == InstallState.NOT_INSTALLED || states[id] == InstallState.UPDATE_AVAILABLE
+                        }
+                        TextButton(onClick = {
+                            showProfiles = false
+                            val queue = apps.filter {
+                                it.id in p.appIds &&
+                                (states[it.id] == InstallState.NOT_INSTALLED || states[it.id] == InstallState.UPDATE_AVAILABLE)
+                            }
+                            scope.launch {
+                                for ((i, a) in queue.withIndex()) {
+                                    val l = latest[a.id] ?: continue
+                                    bulk = "${i + 1}/${queue.size} ${a.name} を準備中"
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            Installer.downloadAndInstall(context, a, l, token)
+                                        }
+                                    } catch (e: Exception) {
+                                        toast("${a.name}: ${e.message}")
+                                    }
+                                    kotlinx.coroutines.delay(2500)
+                                }
+                                bulk = ""
+                                reload()
+                            }
+                        }) { Text("${p.name}（対象 ${n} 本）") }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showProfiles = false }) { Text("閉じる") } }
+        )
     }
 
     if (showSettings) {
