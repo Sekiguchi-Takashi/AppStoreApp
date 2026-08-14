@@ -123,6 +123,36 @@ fun StoreScreen() {
 
     LaunchedEffect(Unit) { reload() }
 
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context, intent: android.content.Intent) {
+                val status = intent.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, -999)
+                val label = intent.getStringExtra("label") ?: ""
+                if (status == android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                    val confirm = if (android.os.Build.VERSION.SDK_INT >= 33)
+                        intent.getParcelableExtra(android.content.Intent.EXTRA_INTENT, android.content.Intent::class.java)
+                    else @Suppress("DEPRECATION") intent.getParcelableExtra(android.content.Intent.EXTRA_INTENT)
+                    confirm?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (confirm != null) c.startActivity(confirm)
+                    return
+                }
+                val msg = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE)
+                toast(SessionInstaller.statusText(status, msg, label))
+                InstallLog.resolvePending(c, apps)
+                for (a in apps) {
+                    states[a.id] = Catalog.installState(c, a, latest[a.id])
+                }
+            }
+        }
+        val filter = android.content.IntentFilter(SessionInstaller.ACTION_RESULT)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            context.registerReceiver(receiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->

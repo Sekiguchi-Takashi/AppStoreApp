@@ -2,7 +2,6 @@ package com.appathy.appstore
 
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.FileProvider
 import java.io.File
 
 object Installer {
@@ -26,13 +25,7 @@ object Installer {
     fun downloadAndInstall(context: Context, app: StoreApp, latest: LatestRelease, token: String) {
         val apk = download(context, app, latest, token)
         InstallLog.markPending(context, app.id, latest.tag, InstallLog.versionOf(context, app))
-        val uri = FileProvider.getUriForFile(context, "com.appathy.appstore.fileprovider", apk)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
+        SessionInstaller.install(context, apk, app.name)
     }
 
     fun clearCache(context: Context) {

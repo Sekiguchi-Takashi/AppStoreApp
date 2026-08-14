@@ -93,6 +93,18 @@ versionName は 1.0 のままのことが多く、実際は最新でも「更新
 問題が見つかった場合はキャッシュを消して1回だけ再ダウンロードし、それでも駄目なら
 理由をトーストで表示してインストーラを起動しない。
 
+## v2.0 の変更（アプリID刷新とセッションインストール）
+1. applicationId を com.appathy.appstore → com.appathy.store に変更。
+   正常な APK なのに新規インストールが失敗し続けた（原因不明の端末内衝突）ため、
+   別アプリとして再出発することで衝突を原理的に排除した。
+   fileprovider authority は ${applicationId}.fileprovider で動的化。
+   旧 com.appathy.appstore（自販機アイコンの旧ストア）が残っていればいつでも削除してよい。
+2. インストール方式を ACTION_VIEW → PackageInstaller セッション方式に変更。
+   結果が BroadcastReceiver に返るため、失敗時は OS の正確な理由
+   （衝突/非互換/容量不足/APK不正など + 詳細メッセージ）がトーストに表示される。
+   「エラーが発生しました」で行き止まりになる問題が解消。
+3. Artifacts を作る build.yml を削除。debug 版を誤って入れる事故を根絶。
+
 ## 署名について（重要）
 Actions の Artifacts から手動で入れた APK は、CI が毎回生成する使い捨ての debug 鍵で署名されている。
 ストア配布版は共通鍵 ci/appathy.keystore で再署名されるため署名が一致せず、上書き更新できない。
