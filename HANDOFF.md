@@ -51,6 +51,13 @@ installedVersionName == tag から v を除いた文字列 → 最新。
 - インストーラから戻ったとき（ON_RESUME）に状態を再判定するので、
   入れ終わると自動で「最新」に変わる。
 
+## v1.4 の変更（重要な不具合修正）
+Android 11 (API 30) 以降のパッケージ可視性制限により、targetSdk 30+ のアプリは
+既定では他アプリの存在を確認できず、getPackageInfo が NameNotFoundException を投げる。
+このため v1.3 以前は全アプリが「未インストール」と判定され、常に「インストール」ボタンが出ていた。
+AndroidManifest に QUERY_ALL_PACKAGES 権限と queries 要素を宣言して解決。
+Play ストア配布アプリではこの権限に審査上の制約があるが、本アプリは未公開配布なので問題ない。
+
 ## 署名について（重要）
 Actions の Artifacts から手動で入れた APK は、CI が毎回生成する使い捨ての debug 鍵で署名されている。
 ストア配布版は共通鍵 ci/appathy.keystore で再署名されるため署名が一致せず、上書き更新できない。

@@ -299,8 +299,8 @@ fun AppRow(app: StoreApp, state: InstallState, latest: LatestRelease?, busy: Boo
 }
 
 private fun statusLabel(state: InstallState, latest: LatestRelease?): String = when (state) {
-    InstallState.NOT_INSTALLED -> latest?.tag ?: ""
-    InstallState.UP_TO_DATE -> "最新 (${latest?.tag ?: "リリースなし"})"
+    InstallState.NOT_INSTALLED -> "未インストール ・ ${latest?.tag ?: ""}"
+    InstallState.UP_TO_DATE -> "最新 ${latest?.tag ?: ""}"
     InstallState.UPDATE_AVAILABLE -> "更新あり → ${latest?.tag}"
     InstallState.NO_RELEASE -> "リリース未作成"
     InstallState.UNKNOWN -> "情報不足"
