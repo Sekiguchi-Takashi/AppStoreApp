@@ -37,6 +37,15 @@ object Github {
         c.inputStream.use { return it.readBytes().decodeToString() }
     }
 
+    fun put(path: String, token: String, jsonBody: String): String {
+        val c = open(if (path.startsWith("http")) path else API + path, token, "application/vnd.github+json")
+        c.requestMethod = "PUT"
+        c.doOutput = true
+        c.setRequestProperty("Content-Type", "application/json")
+        c.outputStream.use { it.write(jsonBody.toByteArray()) }
+        c.inputStream.use { return it.readBytes().decodeToString() }
+    }
+
     fun downloadAsset(assetUrl: String, token: String, dest: File) {
         var c = open(assetUrl, token, "application/octet-stream")
         c.instanceFollowRedirects = false

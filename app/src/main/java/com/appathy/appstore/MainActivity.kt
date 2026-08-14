@@ -7,6 +7,10 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -78,6 +82,8 @@ fun StoreScreen() {
     var apps by remember { mutableStateOf(listOf<StoreApp>()) }
     var profiles by remember { mutableStateOf(listOf<Profile>()) }
     var showProfiles by remember { mutableStateOf(false) }
+    var showManage by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
     var bulk by remember { mutableStateOf("") }
     var conflict by remember { mutableStateOf<Triple<StoreApp, LatestRelease, String>?>(null) }
     var resumeInstall by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -195,8 +201,24 @@ fun StoreScreen() {
                 title = { Text("Appathy Store") },
                 actions = {
                     TextButton(onClick = { showProfiles = true }) { Text("まとめて") }
-                    TextButton(onClick = { reload() }) { Text("更新") }
-                    TextButton(onClick = { showSettings = true }) { Text("設定") }
+                    Box {
+                        var menu by remember { mutableStateOf(false) }
+                        TextButton(onClick = { menu = true }) { Text("メニュー") }
+                        androidx.compose.material3.DropdownMenu(
+                            expanded = menu,
+                            onDismissRequest = { menu = false }
+                        ) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("一覧を再読み込み") },
+                                onClick = { menu = false; reload() })
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("並び順・ステータス管理") },
+                                onClick = { menu = false; showManage = true })
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("トークン設定") },
+                                onClick = { menu = false; showSettings = true })
+                        }
+                    }
                 }
             )
         }
@@ -358,6 +380,65 @@ fun StoreScreen() {
         )
     }
 
+    if (showManage) {
+        val edits = remember(apps) {
+            mutableStateMapOf<String, Pair<String, String>>().apply {
+                apps.forEach { put(it.id, (if (it.order >= 9999) "" else it.order.toString()) to it.status) }
+            }
+        }
+        val statuses = listOf("", "テスト中", "修正中", "最終版", "停止中")
+        AlertDialog(
+            onDismissRequest = { showManage = false },
+            title = { Text("並び順・ステータス") },
+            text = {
+                Column {
+                    Text("番号が小さいものから並びます。空欄は最後尾です。", style = MaterialTheme.typography.bodySmall)
+                    LazyColumn(Modifier.padding(top = 8.dp)) {
+                        items(apps, key = { it.id }) { a ->
+                            val cur = edits[a.id] ?: ("" to "")
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                                OutlinedTextField(
+                                    value = cur.first,
+                                    onValueChange = { v ->
+                                        edits[a.id] = v.filter { it.isDigit() }.take(4) to cur.second
+                                    },
+                                    singleLine = true,
+                                    modifier = Modifier.width(76.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(a.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                                TextButton(onClick = {
+                                    val next = statuses[(statuses.indexOf(cur.second).let { if (it < 0) 0 else it } + 1) % statuses.size]
+                                    edits[a.id] = cur.first to next
+                                }) { Text(if (cur.second.isBlank()) "なし" else cur.second) }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !saving, onClick = {
+                    saving = true
+                    val payload = edits.mapValues { (_, v) ->
+                        (v.first.toIntOrNull() ?: 9999) to v.second
+                    }
+                    scope.launch {
+                        try {
+                            val msg = withContext(Dispatchers.IO) { CatalogWriter.save(token, payload) }
+                            toast(msg)
+                            showManage = false
+                            reload()
+                        } catch (e: Exception) {
+                            toast("保存に失敗: ${e.message}")
+                        }
+                        saving = false
+                    }
+                }) { Text(if (saving) "保存中..." else "保存") }
+            },
+            dismissButton = { TextButton(onClick = { showManage = false }) { Text("閉じる") } }
+        )
+    }
+
     if (showSettings) {
         var input by remember { mutableStateOf("") }
         var editing by remember { mutableStateOf(token.isBlank()) }
@@ -419,8 +500,31 @@ fun AppRow(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val icon = AppIcons.of(androidx.compose.ui.platform.LocalContext.current, app)
+            if (icon != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(44.dp)
+                )
+            } else {
+                Box(
+                    Modifier.size(44.dp),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) { Text(app.name.take(1), style = MaterialTheme.typography.titleLarge) }
+            }
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(app.name, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(app.name, style = MaterialTheme.typography.titleMedium)
+                    if (app.status.isNotBlank()) {
+                        Spacer(Modifier.width(8.dp))
+                        androidx.compose.material3.AssistChip(
+                            onClick = {},
+                            label = { Text(app.status, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
                 Text(
                     "${app.category} ・ ${statusLabel(state, latest)}",
                     style = MaterialTheme.typography.bodySmall

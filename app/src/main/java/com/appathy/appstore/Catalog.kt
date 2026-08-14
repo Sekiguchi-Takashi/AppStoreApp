@@ -18,6 +18,8 @@ data class StoreApp(
     val repo: String,
     val defaultChannel: String,
     val channels: Map<String, ChannelSpec>,
+    val order: Int = 9999,
+    val status: String = "",
 )
 
 data class LatestRelease(val tag: String, val assetName: String, val assetUrl: String, val sha: String?)
@@ -31,7 +33,9 @@ object Catalog {
         val text = Github.getText("/repos/$CATALOG_REPO/contents/catalog.json?ref=main", token, raw = true)
         val root = JSONObject(text)
         val appsJson = root.getJSONArray("apps")
-        val apps = (0 until appsJson.length()).map { parseApp(appsJson.getJSONObject(it)) }
+        val apps = (0 until appsJson.length())
+            .map { parseApp(appsJson.getJSONObject(it)) }
+            .sortedWith(compareBy({ it.order }, { it.name }))
         val profsJson = root.optJSONArray("profiles")
         val profiles = mutableListOf<Profile>()
         if (profsJson != null) {
@@ -61,6 +65,8 @@ object Catalog {
             repo = o.getString("repo"),
             defaultChannel = o.optString("defaultChannel", "stable"),
             channels = channels,
+            order = o.optInt("order", 9999),
+            status = o.optString("status", ""),
         )
     }
 
