@@ -138,6 +138,11 @@ fun StoreScreen() {
                 }
                 val msg = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE)
                 toast(SessionInstaller.statusText(status, msg, label))
+                if (status == android.content.pm.PackageInstaller.STATUS_SUCCESS) {
+                    val appId = intent.getStringExtra("appId")
+                    val tag = intent.getStringExtra("tag")
+                    if (appId != null && tag != null) InstallLog.record(c, appId, tag)
+                }
                 InstallLog.resolvePending(c, apps)
                 for (a in apps) {
                     states[a.id] = Catalog.installState(c, a, latest[a.id])
@@ -299,39 +304,54 @@ fun StoreScreen() {
     }
 
     if (showProfiles) {
+        fun runQueue(queue: List<StoreApp>) {
+            showProfiles = false
+            if (queue.isEmpty()) {
+                toast("対象がありません")
+                return
+            }
+            scope.launch {
+                for ((i, a) in queue.withIndex()) {
+                    val l = latest[a.id] ?: continue
+                    bulk = "${i + 1}/${queue.size} ${a.name} を準備中"
+                    try {
+                        withContext(Dispatchers.IO) {
+                            Installer.downloadAndInstall(context, a, l, token)
+                        }
+                    } catch (e: Exception) {
+                        toast("${a.name}: ${e.message}")
+                    }
+                    kotlinx.coroutines.delay(2500)
+                }
+                bulk = ""
+                reload()
+            }
+        }
+        val updatable = apps.filter { states[it.id] == InstallState.UPDATE_AVAILABLE && latest[it.id] != null }
+        val notInstalled = apps.filter { states[it.id] == InstallState.NOT_INSTALLED && latest[it.id] != null }
         AlertDialog(
             onDismissRequest = { showProfiles = false },
             title = { Text("まとめてインストール") },
             text = {
                 Column {
-                    Text("未インストールのアプリだけを順に入れます。1本ごとに確認画面が出ます。")
+                    Text("1本ごとに OS の確認画面が出ます。")
+                    TextButton(
+                        onClick = { runQueue(updatable) },
+                        enabled = updatable.isNotEmpty()
+                    ) { Text("更新があるものだけ（${updatable.size} 本）") }
+                    TextButton(
+                        onClick = { runQueue(notInstalled) },
+                        enabled = notInstalled.isNotEmpty()
+                    ) { Text("未インストールのみ（${notInstalled.size} 本）") }
                     for (p in profiles) {
-                        val n = p.appIds.count { id ->
-                            states[id] == InstallState.NOT_INSTALLED || states[id] == InstallState.UPDATE_AVAILABLE
+                        val target = apps.filter {
+                            it.id in p.appIds && latest[it.id] != null &&
+                            (states[it.id] == InstallState.NOT_INSTALLED || states[it.id] == InstallState.UPDATE_AVAILABLE)
                         }
-                        TextButton(onClick = {
-                            showProfiles = false
-                            val queue = apps.filter {
-                                it.id in p.appIds &&
-                                (states[it.id] == InstallState.NOT_INSTALLED || states[it.id] == InstallState.UPDATE_AVAILABLE)
-                            }
-                            scope.launch {
-                                for ((i, a) in queue.withIndex()) {
-                                    val l = latest[a.id] ?: continue
-                                    bulk = "${i + 1}/${queue.size} ${a.name} を準備中"
-                                    try {
-                                        withContext(Dispatchers.IO) {
-                                            Installer.downloadAndInstall(context, a, l, token)
-                                        }
-                                    } catch (e: Exception) {
-                                        toast("${a.name}: ${e.message}")
-                                    }
-                                    kotlinx.coroutines.delay(2500)
-                                }
-                                bulk = ""
-                                reload()
-                            }
-                        }) { Text("${p.name}（対象 ${n} 本）") }
+                        TextButton(
+                            onClick = { runQueue(target) },
+                            enabled = target.isNotEmpty()
+                        ) { Text("${p.name}（対象 ${target.size} 本）") }
                     }
                 }
             },

@@ -24,8 +24,7 @@ object Installer {
 
     fun downloadAndInstall(context: Context, app: StoreApp, latest: LatestRelease, token: String) {
         val apk = download(context, app, latest, token)
-        InstallLog.markPending(context, app.id, latest.tag, InstallLog.versionOf(context, app))
-        SessionInstaller.install(context, apk, app.name)
+        SessionInstaller.install(context, apk, app.name, app.id, latest.tag)
     }
 
     fun clearCache(context: Context) {

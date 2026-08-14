@@ -9,7 +9,7 @@ import java.io.File
 object SessionInstaller {
     const val ACTION_RESULT = "appathy.store.INSTALL_RESULT"
 
-    fun install(context: Context, apk: File, label: String) {
+    fun install(context: Context, apk: File, label: String, appId: String, tag: String) {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(
             PackageInstaller.SessionParams.MODE_FULL_INSTALL
@@ -23,6 +23,8 @@ object SessionInstaller {
             val intent = Intent(ACTION_RESULT)
                 .setPackage(context.packageName)
                 .putExtra("label", label)
+                .putExtra("appId", appId)
+                .putExtra("tag", tag)
             val pending = PendingIntent.getBroadcast(
                 context, sessionId, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
