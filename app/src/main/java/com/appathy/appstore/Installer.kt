@@ -15,12 +15,16 @@ object Installer {
         return apk
     }
 
-    fun downloadAndInstall(context: Context, app: StoreApp, latest: LatestRelease, token: String) {
-        val dir = File(context.filesDir, "apks")
-        val apk = File(dir, "${app.id}-${latest.tag}.apk")
-        if (!apk.exists() || apk.length() == 0L) {
-            Github.downloadAsset(latest.assetUrl, token, apk)
+    fun uninstall(context: Context, packageName: String) {
+        val intent = Intent(Intent.ACTION_DELETE).apply {
+            data = android.net.Uri.parse("package:$packageName")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+        context.startActivity(intent)
+    }
+
+    fun downloadAndInstall(context: Context, app: StoreApp, latest: LatestRelease, token: String) {
+        val apk = download(context, app, latest, token)
         InstallLog.markPending(context, app.id, latest.tag, InstallLog.versionOf(context, app))
         val uri = FileProvider.getUriForFile(context, "com.appathy.appstore.fileprovider", apk)
         val intent = Intent(Intent.ACTION_VIEW).apply {

@@ -77,6 +77,8 @@ fun StoreScreen() {
     var profiles by remember { mutableStateOf(listOf<Profile>()) }
     var showProfiles by remember { mutableStateOf(false) }
     var bulk by remember { mutableStateOf("") }
+    var conflict by remember { mutableStateOf<Triple<StoreApp, LatestRelease, String>?>(null) }
+    var resumeInstall by remember { mutableStateOf<Pair<String, String>?>(null) }
     var category by remember { mutableStateOf("すべて") }
     val latest = remember { mutableStateMapOf<String, LatestRelease?>() }
     val states = remember { mutableStateMapOf<String, InstallState>() }
@@ -124,6 +126,23 @@ fun StoreScreen() {
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME && apps.isNotEmpty()) {
                 InstallLog.resolvePending(context, apps)
                 InstallLog.prune(context, apps)
+                val pend = resumeInstall
+                if (pend != null) {
+                    val app = apps.firstOrNull { it.id == pend.first }
+                    val rel = latest[pend.first]
+                    if (app != null && rel != null && Catalog.installedPackage(context, app) == null) {
+                        resumeInstall = null
+                        scope.launch {
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    Installer.downloadAndInstall(context, app, rel, token)
+                                }
+                            } catch (e: Exception) {
+                                toast("${app.name}: ${e.message}")
+                            }
+                        }
+                    }
+                }
                 for (a in apps) {
                     states[a.id] = Catalog.installState(context, a, latest[a.id])
                 }
@@ -180,8 +199,16 @@ fun StoreScreen() {
                             scope.launch {
                                 busy[a.id] = true
                                 try {
-                                    withContext(Dispatchers.IO) {
-                                        Installer.downloadAndInstall(context, a, l, token)
+                                    val reason = withContext(Dispatchers.IO) {
+                                        val apk = Installer.download(context, a, l, token)
+                                        SignatureCheck.blockingReason(context, a, apk)
+                                    }
+                                    if (reason != null) {
+                                        conflict = Triple(a, l, reason)
+                                    } else {
+                                        withContext(Dispatchers.IO) {
+                                            Installer.downloadAndInstall(context, a, l, token)
+                                        }
                                     }
                                 } catch (e: Exception) {
                                     toast("${a.name}: ${e.message}")
@@ -194,6 +221,33 @@ fun StoreScreen() {
                 }
             }
         }
+    }
+
+    conflict?.let { (app, rel, reason) ->
+        AlertDialog(
+            onDismissRequest = { conflict = null },
+            title = { Text("署名が違うため上書きできません") },
+            text = {
+                Column {
+                    Text("${app.name} は端末に入っている版と署名が異なります。Android は署名の違うアプリを上書きできないため、一度削除してから入れ直す必要があります。")
+                    Text("削除するとそのアプリのデータも消えます。", Modifier.padding(top = 8.dp))
+                    Text(reason, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val pkg = Catalog.installedPackage(context, app)?.packageName
+                    conflict = null
+                    if (pkg != null) {
+                        resumeInstall = app.id to rel.tag
+                        Installer.uninstall(context, pkg)
+                    }
+                }) { Text("削除して入れ直す") }
+            },
+            dismissButton = {
+                TextButton(onClick = { conflict = null }) { Text("やめる") }
+            }
+        )
     }
 
     if (showProfiles) {
