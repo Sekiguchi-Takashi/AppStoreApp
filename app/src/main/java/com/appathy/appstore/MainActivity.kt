@@ -103,7 +103,6 @@ fun StoreScreen() {
                         async {
                             val l = runCatching { Catalog.latestFor(a, a.defaultChannel, token) }.getOrNull()
                             latest[a.id] = l
-                            InstallLog.baseline(context, a, l?.tag)
                             states[a.id] = Catalog.installState(context, a, l)
                         }
                     }.awaitAll()

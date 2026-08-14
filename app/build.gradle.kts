@@ -12,8 +12,8 @@ android {
         applicationId = "com.appathy.store"
         minSdk = 26
         targetSdk = 34
-        versionCode = 13
-        versionName = "2.2"
+        versionCode = 15
+        versionName = "2.4"
     }
 
     buildFeatures {

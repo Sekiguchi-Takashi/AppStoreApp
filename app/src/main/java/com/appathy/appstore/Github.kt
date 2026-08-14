@@ -23,6 +23,20 @@ object Github {
         c.inputStream.use { return it.readBytes().decodeToString() }
     }
 
+    fun getAssetText(assetUrl: String, token: String): String {
+        var c = open(assetUrl, token, "application/octet-stream")
+        c.instanceFollowRedirects = false
+        if (c.responseCode in 300..399) {
+            val loc = c.headerFields["Location"]?.firstOrNull()
+                ?: throw IllegalStateException("リダイレクト先がありません")
+            c.disconnect()
+            c = URL(loc).openConnection() as HttpURLConnection
+            c.connectTimeout = 15000
+            c.readTimeout = 30000
+        }
+        c.inputStream.use { return it.readBytes().decodeToString() }
+    }
+
     fun downloadAsset(assetUrl: String, token: String, dest: File) {
         var c = open(assetUrl, token, "application/octet-stream")
         c.instanceFollowRedirects = false

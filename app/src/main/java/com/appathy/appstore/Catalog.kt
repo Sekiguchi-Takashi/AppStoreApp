@@ -20,7 +20,7 @@ data class StoreApp(
     val channels: Map<String, ChannelSpec>,
 )
 
-data class LatestRelease(val tag: String, val assetName: String, val assetUrl: String)
+data class LatestRelease(val tag: String, val assetName: String, val assetUrl: String, val sha: String?)
 
 enum class InstallState { NOT_INSTALLED, UP_TO_DATE, UPDATE_AVAILABLE, NO_RELEASE, UNKNOWN }
 
@@ -75,12 +75,31 @@ object Catalog {
             val tag = rel.optString("tag_name")
             if (!tagRe.containsMatchIn(tag)) continue
             val assets = rel.optJSONArray("assets") ?: continue
+            var apkName: String? = null
+            var apkUrl: String? = null
+            var metaUrl: String? = null
             for (j in 0 until assets.length()) {
                 val a = assets.getJSONObject(j)
                 val name = a.optString("name")
-                if (assetRe.containsMatchIn(name)) {
-                    return LatestRelease(tag, name, a.getString("url"))
+                if (apkName == null && assetRe.containsMatchIn(name) && name.endsWith(".apk")) {
+                    apkName = name
+                    apkUrl = a.getString("url")
                 }
+            }
+            if (apkName != null) {
+                val wantMeta = apkName.removeSuffix(".apk") + ".meta"
+                for (j in 0 until assets.length()) {
+                    val a = assets.getJSONObject(j)
+                    if (a.optString("name") == wantMeta) metaUrl = a.getString("url")
+                }
+                var sha: String? = null
+                if (metaUrl != null) {
+                    sha = runCatching {
+                        Regex("sha256=([0-9a-fA-F]{64})")
+                            .find(Github.getAssetText(metaUrl, token))?.groupValues?.get(1)
+                    }.getOrNull()
+                }
+                return LatestRelease(tag, apkName, apkUrl!!, sha)
             }
         }
         return null
@@ -105,8 +124,18 @@ object Catalog {
             return if (latest == null) InstallState.NO_RELEASE else InstallState.NOT_INSTALLED
         }
         if (latest == null) return InstallState.UP_TO_DATE
+        if (latest.sha != null) {
+            val h = ApkHash.of(context, installed)
+            if (h != null) {
+                return if (h.equals(latest.sha, ignoreCase = true)) InstallState.UP_TO_DATE
+                else InstallState.UPDATE_AVAILABLE
+            }
+        }
         val recorded = InstallLog.tagOf(context, app.id)
-        return if (recorded == null || recorded == latest.tag) InstallState.UP_TO_DATE
-        else InstallState.UPDATE_AVAILABLE
+        return when {
+            recorded == latest.tag -> InstallState.UP_TO_DATE
+            recorded != null -> InstallState.UPDATE_AVAILABLE
+            else -> InstallState.UP_TO_DATE
+        }
     }
 }
