@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -210,27 +211,48 @@ fun StoreScreen() {
     }
 
     if (showSettings) {
-        var input by remember { mutableStateOf(token) }
+        var input by remember { mutableStateOf("") }
+        var editing by remember { mutableStateOf(token.isBlank()) }
         AlertDialog(
             onDismissRequest = { if (token.isNotBlank()) showSettings = false },
             title = { Text("GitHub トークン") },
             text = {
                 Column {
-                    Text("private リポジトリの読み取り権限を持つ PAT を入力。端末内にのみ保存されます。")
-                    OutlinedTextField(value = input, onValueChange = { input = it }, singleLine = true)
+                    if (editing) {
+                        Text("private リポジトリの読み取り権限を持つトークンを入力。端末内にのみ保存されます。")
+                        OutlinedTextField(
+                            value = input,
+                            onValueChange = { input = it },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                        )
+                    } else {
+                        Text("保存済み: " + masked(token))
+                        Text("トークンは端末内にのみ保存されています。")
+                        TextButton(onClick = { input = ""; editing = true }) { Text("変更する") }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    token = input.trim()
-                    prefs.edit().putString("token", token).apply()
-                    showSettings = false
-                    reload()
-                }) { Text("保存") }
+                if (editing) {
+                    TextButton(onClick = {
+                        if (input.isNotBlank()) {
+                            token = input.trim()
+                            prefs.edit().putString("token", token).apply()
+                            reload()
+                        }
+                        showSettings = false
+                    }) { Text("保存") }
+                } else {
+                    TextButton(onClick = { showSettings = false }) { Text("閉じる") }
+                }
             }
         )
     }
 }
+
+private fun masked(t: String): String =
+    if (t.length <= 8) "********" else t.take(4) + "*".repeat(8) + t.takeLast(4)
 
 @Composable
 fun AppRow(app: StoreApp, state: InstallState, latest: LatestRelease?, busy: Boolean, onInstall: () -> Unit) {
@@ -252,7 +274,10 @@ fun AppRow(app: StoreApp, state: InstallState, latest: LatestRelease?, busy: Boo
                     Button(onClick = onInstall) { Text("インストール") }
                 state == InstallState.UPDATE_AVAILABLE ->
                     Button(onClick = onInstall) { Text("更新") }
-                else -> {}
+                state == InstallState.UP_TO_DATE ->
+                    Button(onClick = {}, enabled = false) { Text("最新") }
+                else ->
+                    Button(onClick = {}, enabled = false) { Text("配布なし") }
             }
         }
     }
