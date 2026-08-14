@@ -107,6 +107,20 @@ fun StoreScreen() {
 
     LaunchedEffect(Unit) { reload() }
 
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME && apps.isNotEmpty()) {
+                InstallLog.prune(context, apps)
+                for (a in apps) {
+                    states[a.id] = Catalog.installState(context, a, latest[a.id])
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -161,6 +175,7 @@ fun StoreScreen() {
                                     toast("${a.name}: ${e.message}")
                                 }
                                 busy[a.id] = false
+                                states[a.id] = Catalog.installState(context, a, latest[a.id])
                             }
                         }
                     )

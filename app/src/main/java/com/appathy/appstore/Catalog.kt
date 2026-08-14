@@ -86,13 +86,21 @@ object Catalog {
         return null
     }
 
+    fun installedPackage(context: Context, app: StoreApp): android.content.pm.PackageInfo? {
+        if (app.packageName.isBlank()) return null
+        val candidates = listOf(app.packageName, app.packageName + ".debug")
+        for (p in candidates) {
+            try {
+                return context.packageManager.getPackageInfo(p, 0)
+            } catch (e: PackageManager.NameNotFoundException) {
+            }
+        }
+        return null
+    }
+
     fun installState(context: Context, app: StoreApp, latest: LatestRelease?): InstallState {
         if (app.packageName.isBlank()) return InstallState.UNKNOWN
-        val installed = try {
-            context.packageManager.getPackageInfo(app.packageName, 0)
-        } catch (e: PackageManager.NameNotFoundException) {
-            null
-        }
+        val installed = installedPackage(context, app)
         if (installed == null) {
             return if (latest == null) InstallState.NO_RELEASE else InstallState.NOT_INSTALLED
         }

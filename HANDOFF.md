@@ -44,6 +44,19 @@ installedVersionName == tag から v を除いた文字列 → 最新。
   - 最新 → 「最新」（グレーアウト）
   - リリース未作成 / 情報不足 → 「配布なし」（グレーアウト）
 
+## v1.3 の変更
+- インストール判定で `<packageName>.debug` も探す。release.yml は assembleDebug でビルドするため、
+  applicationIdSuffix = ".debug" を持つプロジェクトは実際には .debug 付きで入る。
+  これを見落とすと、入っているのに「インストール」と表示されてしまう。
+- インストーラから戻ったとき（ON_RESUME）に状態を再判定するので、
+  入れ終わると自動で「最新」に変わる。
+
+## 署名について（重要）
+Actions の Artifacts から手動で入れた APK は、CI が毎回生成する使い捨ての debug 鍵で署名されている。
+ストア配布版は共通鍵 ci/appathy.keystore で再署名されるため署名が一致せず、上書き更新できない。
+そのため各アプリの「初回だけ」アンインストールが必要。一度ストアから入れれば以後は上書きで更新できる。
+今後は Artifacts から手動で入れないこと。
+
 ## ロードマップ（仕様確定済み）
 1. チャネル切替 UI（Stable / Beta / Nightly / Experimental をアプリごとにワンタップ）
 3. QR 共有（landingBaseUrl + ?app=ID&channel=CH の二段構え。GitHub Pages の着地ページが別途必要）

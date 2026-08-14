@@ -18,16 +18,9 @@ object InstallLog {
     }
 
     fun prune(context: Context, apps: List<StoreApp>) {
-        val pm = context.packageManager
         for (a in apps) {
             if (a.packageName.isBlank()) continue
-            val gone = try {
-                pm.getPackageInfo(a.packageName, 0)
-                false
-            } catch (e: PackageManager.NameNotFoundException) {
-                true
-            }
-            if (gone) forget(context, a.id)
+            if (Catalog.installedPackage(context, a) == null) forget(context, a.id)
         }
     }
 }
