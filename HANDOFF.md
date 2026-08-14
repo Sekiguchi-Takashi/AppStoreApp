@@ -138,6 +138,16 @@ meta が無い古い Release ではタグ記録にフォールバックし、記
 全リポジトリに force で新タグを打てば meta が行き渡り、全アプリが指紋判定になる。
 これにより「更新がないのに押せる」「更新があるのに押せない」の両方が構造的に消える。
 
+## v2.5 の変更（Release の整理と Artifacts 復活）
+- Release のアセットは APK のみ。SHA-256 はリリースノート本文（sha256 ファイル名 ハッシュ）に
+  記載する方式に変更し、.meta ファイルを廃止。ストアは releases JSON の body から読むため
+  追加の通信も不要になった。
+- Release ワークフローが署名済み APK を Artifacts（Actions 直下）にもアップロードする。
+  Release と同一ファイルなので Actions からダウンロードしても署名事故は起きない。
+- 前回の rollout で汎用テンプレートに上書きされ APK 名が app-* になっていた問題を修正。
+  ストア専用 release.yml（appstore-* 命名）を復元。rollout は AppStoreApp / GameLab /
+  KingStackApp / MusicRoomApp を恒久的に除外するようになった（release.sh all も同様）。
+
 ## 署名について（重要）
 Actions の Artifacts から手動で入れた APK は、CI が毎回生成する使い捨ての debug 鍵で署名されている。
 ストア配布版は共通鍵 ci/appathy.keystore で再署名されるため署名が一致せず、上書き更新できない。

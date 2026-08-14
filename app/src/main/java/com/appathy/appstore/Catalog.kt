@@ -73,11 +73,11 @@ object Catalog {
         for (i in 0 until arr.length()) {
             val rel = arr.getJSONObject(i)
             val tag = rel.optString("tag_name")
+            val body = rel.optString("body")
             if (!tagRe.containsMatchIn(tag)) continue
             val assets = rel.optJSONArray("assets") ?: continue
             var apkName: String? = null
             var apkUrl: String? = null
-            var metaUrl: String? = null
             for (j in 0 until assets.length()) {
                 val a = assets.getJSONObject(j)
                 val name = a.optString("name")
@@ -87,18 +87,8 @@ object Catalog {
                 }
             }
             if (apkName != null) {
-                val wantMeta = apkName.removeSuffix(".apk") + ".meta"
-                for (j in 0 until assets.length()) {
-                    val a = assets.getJSONObject(j)
-                    if (a.optString("name") == wantMeta) metaUrl = a.getString("url")
-                }
-                var sha: String? = null
-                if (metaUrl != null) {
-                    sha = runCatching {
-                        Regex("sha256=([0-9a-fA-F]{64})")
-                            .find(Github.getAssetText(metaUrl, token))?.groupValues?.get(1)
-                    }.getOrNull()
-                }
+                val sha = Regex("sha256 " + Regex.escape(apkName) + " ([0-9a-fA-F]{64})")
+                    .find(body)?.groupValues?.get(1)
                 return LatestRelease(tag, apkName, apkUrl!!, sha)
             }
         }
