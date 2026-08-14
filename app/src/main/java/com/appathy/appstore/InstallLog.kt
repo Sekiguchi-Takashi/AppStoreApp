@@ -44,6 +44,14 @@ object InstallLog {
         prefs(context).edit().putString(appId, tag).apply()
     }
 
+    /** 記録が無い（ストア外で入れた）アプリは、今の最新タグを基準として記録する */
+    fun baseline(context: Context, app: StoreApp, latestTag: String?) {
+        if (latestTag == null) return
+        if (Catalog.installedPackage(context, app) == null) return
+        if (tagOf(context, app.id) != null) return
+        record(context, app.id, latestTag)
+    }
+
     fun tagOf(context: Context, appId: String): String? =
         prefs(context).getString(appId, null)
 

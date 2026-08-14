@@ -106,12 +106,7 @@ object Catalog {
         }
         if (latest == null) return InstallState.UP_TO_DATE
         val recorded = InstallLog.tagOf(context, app.id)
-        if (recorded != null) {
-            return if (recorded == latest.tag) InstallState.UP_TO_DATE else InstallState.UPDATE_AVAILABLE
-        }
-        val installedVersion = installed.versionName ?: ""
-        val latestVersion = latest.tag.removePrefix("v")
-        return if (installedVersion == latestVersion) InstallState.UP_TO_DATE
+        return if (recorded == null || recorded == latest.tag) InstallState.UP_TO_DATE
         else InstallState.UPDATE_AVAILABLE
     }
 }

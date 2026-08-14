@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -101,6 +103,7 @@ fun StoreScreen() {
                         async {
                             val l = runCatching { Catalog.latestFor(a, a.defaultChannel, token) }.getOrNull()
                             latest[a.id] = l
+                            InstallLog.baseline(context, a, l?.tag)
                             states[a.id] = Catalog.installState(context, a, l)
                         }
                     }.awaitAll()
@@ -194,6 +197,11 @@ fun StoreScreen() {
                         state = states[a.id] ?: InstallState.UNKNOWN,
                         latest = latest[a.id],
                         busy = busy[a.id] == true,
+                        onReinstall = {
+                            InstallLog.forget(context, a.id)
+                            states[a.id] = InstallState.UPDATE_AVAILABLE
+                            toast("${a.name}: 再インストールできます")
+                        },
                         onInstall = {
                             val l = latest[a.id] ?: return@AppRow
                             scope.launch {
@@ -335,11 +343,21 @@ fun StoreScreen() {
 private fun masked(t: String): String =
     if (t.length <= 8) "********" else t.take(4) + "*".repeat(8) + t.takeLast(4)
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AppRow(app: StoreApp, state: InstallState, latest: LatestRelease?, busy: Boolean, onInstall: () -> Unit) {
+fun AppRow(
+    app: StoreApp,
+    state: InstallState,
+    latest: LatestRelease?,
+    busy: Boolean,
+    onInstall: () -> Unit,
+    onReinstall: () -> Unit = {},
+) {
     Card(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.padding(12.dp),
+            Modifier
+                .combinedClickable(onClick = {}, onLongClick = onReinstall)
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
