@@ -20,6 +20,7 @@ data class StoreApp(
     val channels: Map<String, ChannelSpec>,
     val order: Int = 9999,
     val status: String = "",
+    val memo: String = "",
 )
 
 data class LatestRelease(val tag: String, val assetName: String, val assetUrl: String, val sha: String?)
@@ -67,6 +68,7 @@ object Catalog {
             channels = channels,
             order = o.optInt("order", 9999),
             status = o.optString("status", ""),
+            memo = o.optString("memo", ""),
         )
     }
 

@@ -83,6 +83,8 @@ fun StoreScreen() {
     var profiles by remember { mutableStateOf(listOf<Profile>()) }
     var showProfiles by remember { mutableStateOf(false) }
     var showManage by remember { mutableStateOf(false) }
+    var showOrder by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var bulk by remember { mutableStateOf("") }
     var conflict by remember { mutableStateOf<Triple<StoreApp, LatestRelease, String>?>(null) }
@@ -146,7 +148,11 @@ fun StoreScreen() {
                 if (status == android.content.pm.PackageInstaller.STATUS_SUCCESS) {
                     val appId = intent.getStringExtra("appId")
                     val tag = intent.getStringExtra("tag")
-                    if (appId != null && tag != null) InstallLog.record(c, appId, tag)
+                    if (appId != null && tag != null) {
+                        val wasInstalled = InstallLog.tagOf(c, appId) != null
+                        InstallLog.record(c, appId, tag)
+                        History.add(c, label, if (wasInstalled) "更新" else "インストール", tag)
+                    }
                 }
                 InstallLog.resolvePending(c, apps)
                 for (a in apps) {
@@ -200,7 +206,6 @@ fun StoreScreen() {
             TopAppBar(
                 title = { Text("Appathy Store") },
                 actions = {
-                    TextButton(onClick = { showProfiles = true }) { Text("まとめて") }
                     Box {
                         var menu by remember { mutableStateOf(false) }
                         TextButton(onClick = { menu = true }) { Text("メニュー") }
@@ -209,11 +214,20 @@ fun StoreScreen() {
                             onDismissRequest = { menu = false }
                         ) {
                             androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("まとめてインストール") },
+                                onClick = { menu = false; showProfiles = true })
+                            androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("一覧を再読み込み") },
                                 onClick = { menu = false; reload() })
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("並び順・ステータス管理") },
+                                text = { Text("並び順") },
+                                onClick = { menu = false; showOrder = true })
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("ステータス") },
                                 onClick = { menu = false; showManage = true })
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("履歴") },
+                                onClick = { menu = false; showHistory = true })
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("トークン設定") },
                                 onClick = { menu = false; showSettings = true })
@@ -383,35 +397,32 @@ fun StoreScreen() {
     if (showManage) {
         val edits = remember(apps) {
             mutableStateMapOf<String, Pair<String, String>>().apply {
-                apps.forEach { put(it.id, (if (it.order >= 9999) "" else it.order.toString()) to it.status) }
+                apps.forEach { put(it.id, it.status to it.memo) }
             }
         }
         val statuses = listOf("", "テスト中", "修正中", "最終版", "停止中")
         AlertDialog(
             onDismissRequest = { showManage = false },
-            title = { Text("並び順・ステータス") },
+            title = { Text("ステータス") },
             text = {
-                Column {
-                    Text("番号が小さいものから並びます。空欄は最後尾です。", style = MaterialTheme.typography.bodySmall)
-                    LazyColumn(Modifier.padding(top = 8.dp)) {
-                        items(apps, key = { it.id }) { a ->
-                            val cur = edits[a.id] ?: ("" to "")
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-                                OutlinedTextField(
-                                    value = cur.first,
-                                    onValueChange = { v ->
-                                        edits[a.id] = v.filter { it.isDigit() }.take(4) to cur.second
-                                    },
-                                    singleLine = true,
-                                    modifier = Modifier.width(76.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
+                LazyColumn {
+                    items(apps, key = { it.id }) { a ->
+                        val cur = edits[a.id] ?: ("" to "")
+                        Column(Modifier.padding(vertical = 4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(a.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                                 TextButton(onClick = {
-                                    val next = statuses[(statuses.indexOf(cur.second).let { if (it < 0) 0 else it } + 1) % statuses.size]
-                                    edits[a.id] = cur.first to next
-                                }) { Text(if (cur.second.isBlank()) "なし" else cur.second) }
+                                    val i = statuses.indexOf(cur.first).let { if (it < 0) 0 else it }
+                                    edits[a.id] = statuses[(i + 1) % statuses.size] to cur.second
+                                }) { Text(if (cur.first.isBlank()) "なし" else cur.first) }
                             }
+                            OutlinedTextField(
+                                value = cur.second,
+                                onValueChange = { edits[a.id] = cur.first to it.take(20) },
+                                singleLine = true,
+                                label = { Text("メモ (20文字まで)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
@@ -419,12 +430,10 @@ fun StoreScreen() {
             confirmButton = {
                 TextButton(enabled = !saving, onClick = {
                     saving = true
-                    val payload = edits.mapValues { (_, v) ->
-                        (v.first.toIntOrNull() ?: 9999) to v.second
-                    }
+                    val payload = edits.toMap()
                     scope.launch {
                         try {
-                            val msg = withContext(Dispatchers.IO) { CatalogWriter.save(token, payload) }
+                            val msg = withContext(Dispatchers.IO) { CatalogWriter.saveStatus(token, payload) }
                             toast(msg)
                             showManage = false
                             reload()
@@ -436,6 +445,138 @@ fun StoreScreen() {
                 }) { Text(if (saving) "保存中..." else "保存") }
             },
             dismissButton = { TextButton(onClick = { showManage = false }) { Text("閉じる") } }
+        )
+    }
+
+    if (showOrder) {
+        val slots = remember(apps) {
+            mutableStateMapOf<Int, String>().apply {
+                apps.filter { it.order in 1..50 }.forEach { put(it.order, it.id) }
+            }
+        }
+        var picking by remember { mutableStateOf<Int?>(null) }
+        var confirmReset by remember { mutableStateOf(false) }
+        val nameOf = apps.associate { it.id to it.name }
+
+        AlertDialog(
+            onDismissRequest = { showOrder = false },
+            title = { Text("並び順") },
+            text = {
+                Column {
+                    Text("番号をタップしてアプリを選びます。選ばなかったアプリは最後尾になります。",
+                        style = MaterialTheme.typography.bodySmall)
+                    LazyColumn(Modifier.padding(top = 8.dp)) {
+                        items((1..50).toList()) { n ->
+                            val id = slots[n]
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("$n", Modifier.width(36.dp), style = MaterialTheme.typography.bodyMedium)
+                                TextButton(onClick = { picking = n }, modifier = Modifier.weight(1f)) {
+                                    Text(if (id == null) "（未選択）" else nameOf[id] ?: id)
+                                }
+                                if (id != null) {
+                                    TextButton(onClick = { slots.remove(n) }) { Text("解除") }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !saving, onClick = {
+                    saving = true
+                    val payload = slots.entries.associate { (n, id) -> id to n }
+                    scope.launch {
+                        try {
+                            val msg = withContext(Dispatchers.IO) { CatalogWriter.saveOrder(token, payload) }
+                            toast(msg)
+                            showOrder = false
+                            reload()
+                        } catch (e: Exception) {
+                            toast("保存に失敗: ${e.message}")
+                        }
+                        saving = false
+                    }
+                }) { Text(if (saving) "保存中..." else "保存") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { confirmReset = true }) { Text("リセット") }
+                    TextButton(onClick = { showOrder = false }) { Text("閉じる") }
+                }
+            }
+        )
+
+        picking?.let { slot ->
+            val used = slots.values.toSet()
+            val choices = apps.filter { it.id !in used }
+            AlertDialog(
+                onDismissRequest = { picking = null },
+                title = { Text("$slot 番に入れるアプリ") },
+                text = {
+                    if (choices.isEmpty()) {
+                        Text("選べるアプリがありません")
+                    } else {
+                        LazyColumn {
+                            items(choices, key = { it.id }) { a ->
+                                TextButton(onClick = {
+                                    slots[slot] = a.id
+                                    picking = null
+                                }, modifier = Modifier.fillMaxWidth()) { Text(a.name) }
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { picking = null }) { Text("閉じる") } }
+            )
+        }
+
+        if (confirmReset) {
+            AlertDialog(
+                onDismissRequest = { confirmReset = false },
+                title = { Text("並び順をリセットしますか？") },
+                text = { Text("すべての番号の割り当てを解除します。保存を押すまでカタログには反映されません。") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        slots.clear()
+                        confirmReset = false
+                    }) { Text("リセットする") }
+                },
+                dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("やめる") } }
+            )
+        }
+    }
+
+    if (showHistory) {
+        val entries = remember(showHistory) { History.list(context) }
+        val fmt = remember { java.text.SimpleDateFormat("MM/dd HH:mm", java.util.Locale.JAPAN) }
+        AlertDialog(
+            onDismissRequest = { showHistory = false },
+            title = { Text("履歴（最大100件・1か月）") },
+            text = {
+                if (entries.isEmpty()) {
+                    Text("まだ履歴がありません")
+                } else {
+                    LazyColumn {
+                        items(entries) { e ->
+                            Column(Modifier.padding(vertical = 4.dp)) {
+                                Text("${e.name} ・ ${e.action}", style = MaterialTheme.typography.bodyMedium)
+                                Text("${fmt.format(java.util.Date(e.time))} ・ ${e.tag}",
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showHistory = false }) { Text("閉じる") } },
+            dismissButton = {
+                TextButton(onClick = {
+                    History.clear(context)
+                    showHistory = false
+                }) { Text("全消去") }
+            }
         )
     }
 
@@ -529,6 +670,9 @@ fun AppRow(
                     "${app.category} ・ ${statusLabel(state, latest)}",
                     style = MaterialTheme.typography.bodySmall
                 )
+                if (app.memo.isNotBlank()) {
+                    Text(app.memo, style = MaterialTheme.typography.bodySmall)
+                }
             }
             when {
                 busy -> CircularProgressIndicator(Modifier.padding(8.dp))
