@@ -24,13 +24,16 @@ object Diagnostics {
                 problems.add("${app.id}: packageName が空。setpkg.sh で設定が必要")
             }
 
-            val raw = runCatching {
+            val res = runCatching {
                 Github.getText("/repos/${app.repo}/releases?per_page=1", token)
-            }.getOrElse {
-                sb.append("  Release: 取得失敗 (").append(it.message).append(")\n\n")
-                problems.add("${app.id}: Release 取得失敗 ${it.message}")
+            }
+            if (res.isFailure) {
+                val msg = res.exceptionOrNull()?.message ?: "不明なエラー"
+                sb.append("  Release: 取得失敗 (").append(msg).append(")\n\n")
+                problems.add("${app.id}: Release 取得失敗 " + msg)
                 continue
             }
+            val raw = res.getOrNull() ?: ""
 
             val arr = runCatching { JSONArray(raw) }.getOrNull()
             if (arr == null || arr.length() == 0) {
