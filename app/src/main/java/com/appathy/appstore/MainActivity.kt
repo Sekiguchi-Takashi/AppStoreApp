@@ -85,6 +85,8 @@ fun StoreScreen() {
     var showManage by remember { mutableStateOf(false) }
     var showOrder by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
+    var showDiag by remember { mutableStateOf(false) }
+    var diagText by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     var bulk by remember { mutableStateOf("") }
     var conflict by remember { mutableStateOf<Triple<StoreApp, LatestRelease, String>?>(null) }
@@ -228,6 +230,9 @@ fun StoreScreen() {
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("履歴") },
                                 onClick = { menu = false; showHistory = true })
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Release診断（報告用）") },
+                                onClick = { menu = false; showDiag = true })
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("トークン設定") },
                                 onClick = { menu = false; showSettings = true })
@@ -576,6 +581,45 @@ fun StoreScreen() {
                     History.clear(context)
                     showHistory = false
                 }) { Text("全消去") }
+            }
+        )
+    }
+
+    if (showDiag) {
+        LaunchedEffect(showDiag) {
+            if (diagText.isBlank()) {
+                diagText = "診断中..."
+                diagText = withContext(Dispatchers.IO) {
+                    runCatching { Diagnostics.report(context, apps, token) }
+                        .getOrElse { "診断に失敗しました: ${it.message}" }
+                }
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { showDiag = false; diagText = "" },
+            title = { Text("Release診断") },
+            text = {
+                Column {
+                    Text("この内容をコピーしてチャットに貼ると原因を特定できます。",
+                        style = MaterialTheme.typography.bodySmall)
+                    LazyColumn(Modifier.padding(top = 8.dp)) {
+                        items(diagText.split("\n\n")) { block ->
+                            Text(block, style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(bottom = 6.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("diag", diagText))
+                    toast("コピーしました")
+                }) { Text("コピー") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiag = false; diagText = "" }) { Text("閉じる") }
             }
         )
     }
