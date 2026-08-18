@@ -5,15 +5,14 @@ import org.json.JSONArray
 
 object Diagnostics {
 
-    fun report(context: Context, apps: List<StoreApp>, token: String): String {
+    fun reportOne(context: Context, app: StoreApp, token: String): String {
         val sb = StringBuilder()
         sb.append("Appathy Store 診断レポート\n")
-        sb.append("ストア: ").append(BuildInfo.version(context)).append("\n")
-        sb.append("対象: ").append(apps.size).append(" 件\n\n")
+        sb.append("ストア: ").append(BuildInfo.version(context)).append("\n\n")
 
         val problems = mutableListOf<String>()
 
-        for (app in apps) {
+        run {
             val spec = app.channels[app.defaultChannel]
             sb.append("[").append(app.id).append("] ").append(app.name).append("\n")
             sb.append("  repo=").append(app.repo).append("\n")
@@ -29,17 +28,17 @@ object Diagnostics {
             }
             if (res.isFailure) {
                 val msg = res.exceptionOrNull()?.message ?: "不明なエラー"
-                sb.append("  Release: 取得失敗 (").append(msg).append(")\n\n")
+                sb.append("  Release: 取得失敗 (").append(msg).append(")\n")
                 problems.add("${app.id}: Release 取得失敗 " + msg)
-                continue
+                return finish(sb, problems)
             }
             val raw = res.getOrNull() ?: ""
 
             val arr = runCatching { JSONArray(raw) }.getOrNull()
             if (arr == null || arr.length() == 0) {
-                sb.append("  Release: なし\n\n")
+                sb.append("  Release: なし\n")
                 problems.add("${app.id}: Release が1件もない。タグを打つ必要がある")
-                continue
+                return finish(sb, problems)
             }
 
             val rel = arr.getJSONObject(0)
@@ -92,6 +91,10 @@ object Diagnostics {
             sb.append("\n")
         }
 
+        return finish(sb, problems)
+    }
+
+    private fun finish(sb: StringBuilder, problems: List<String>): String {
         sb.append("=== 要対応 ").append(problems.size).append(" 件 ===\n")
         if (problems.isEmpty()) {
             sb.append("問題は見つかりませんでした\n")

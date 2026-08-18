@@ -586,42 +586,62 @@ fun StoreScreen() {
     }
 
     if (showDiag) {
-        LaunchedEffect(showDiag) {
-            if (diagText.isBlank()) {
+        var picked by remember { mutableStateOf<StoreApp?>(null) }
+        if (picked == null) {
+            AlertDialog(
+                onDismissRequest = { showDiag = false },
+                title = { Text("どのアプリを調べますか") },
+                text = {
+                    LazyColumn {
+                        items(apps, key = { it.id }) { a ->
+                            TextButton(
+                                onClick = { picked = a; diagText = "" },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(a.name) }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showDiag = false }) { Text("閉じる") } }
+            )
+        } else {
+            val target = picked!!
+            LaunchedEffect(target.id) {
                 diagText = "診断中..."
                 diagText = withContext(Dispatchers.IO) {
-                    runCatching { Diagnostics.report(context, apps, token) }
+                    runCatching { Diagnostics.reportOne(context, target, token) }
                         .getOrElse { "診断に失敗しました: ${it.message}" }
                 }
             }
-        }
-        AlertDialog(
-            onDismissRequest = { showDiag = false; diagText = "" },
-            title = { Text("Release診断") },
-            text = {
-                Column {
-                    Text("この内容をコピーしてチャットに貼ると原因を特定できます。",
-                        style = MaterialTheme.typography.bodySmall)
-                    LazyColumn(Modifier.padding(top = 8.dp)) {
-                        items(diagText.split("\n\n")) { block ->
-                            Text(block, style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(bottom = 6.dp))
+            AlertDialog(
+                onDismissRequest = { showDiag = false; picked = null; diagText = "" },
+                title = { Text(target.name + " の診断") },
+                text = {
+                    Column {
+                        Text("コピーしてチャットに貼ると原因を特定できます。",
+                            style = MaterialTheme.typography.bodySmall)
+                        LazyColumn(Modifier.padding(top = 8.dp)) {
+                            items(diagText.split("\n")) { line ->
+                                Text(line, style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                            as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("diag", diagText))
+                        toast("コピーしました")
+                    }) { Text("コピー") }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = { picked = null; diagText = "" }) { Text("別のアプリ") }
+                        TextButton(onClick = { showDiag = false; picked = null; diagText = "" }) { Text("閉じる") }
+                    }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                        as android.content.ClipboardManager
-                    cm.setPrimaryClip(android.content.ClipData.newPlainText("diag", diagText))
-                    toast("コピーしました")
-                }) { Text("コピー") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDiag = false; diagText = "" }) { Text("閉じる") }
-            }
-        )
+            )
+        }
     }
 
     if (showSettings) {
