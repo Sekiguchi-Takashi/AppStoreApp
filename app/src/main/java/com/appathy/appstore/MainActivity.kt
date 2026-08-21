@@ -123,6 +123,8 @@ fun StoreScreen() {
                     }
                     Installer.pruneCache(context, keep)
                 }
+                WidgetCache.save(context, list, states)
+                StoreWidget.notifyChanged(context)
             } catch (e: Exception) {
                 toast("カタログ取得に失敗: ${e.message}")
             }
@@ -131,6 +133,21 @@ fun StoreScreen() {
     }
 
     LaunchedEffect(Unit) { reload() }
+
+    val activity = context as? android.app.Activity
+    LaunchedEffect(apps.size) {
+        val want = activity?.intent?.getStringExtra(StoreWidget.EXTRA_AUTO_INSTALL) ?: return@LaunchedEffect
+        activity.intent?.removeExtra(StoreWidget.EXTRA_AUTO_INSTALL)
+        val a = apps.firstOrNull { it.id == want } ?: return@LaunchedEffect
+        val l = latest[a.id] ?: return@LaunchedEffect
+        busy[a.id] = true
+        try {
+            withContext(Dispatchers.IO) { Installer.downloadAndInstall(context, a, l, token) }
+        } catch (e: Exception) {
+            toast("${a.name}: ${e.message}")
+        }
+        busy[a.id] = false
+    }
 
     androidx.compose.runtime.DisposableEffect(Unit) {
         val receiver = object : android.content.BroadcastReceiver() {
