@@ -754,7 +754,7 @@ fun AppRow(
                     }
                 }
                 Text(
-                    "${app.category} ・ ${statusLabel(state, latest)}",
+                    statusLabel(state, latest),
                     style = MaterialTheme.typography.bodySmall
                 )
                 if (app.memo.isNotBlank()) {
