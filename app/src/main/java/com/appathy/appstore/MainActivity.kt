@@ -773,6 +773,11 @@ fun AppRow(
                     Text(app.memo, style = MaterialTheme.typography.bodySmall)
                 }
             }
+            if (showOpen && !busy &&
+                (state == InstallState.UP_TO_DATE || state == InstallState.UPDATE_AVAILABLE)
+            ) {
+                TextButton(onClick = onOpen) { Text("開く") }
+            }
             when {
                 busy -> CircularProgressIndicator(Modifier.padding(8.dp))
                 state == InstallState.NOT_INSTALLED ->
