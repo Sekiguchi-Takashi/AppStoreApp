@@ -17,8 +17,24 @@ class StoreWidgetFactory(private val context: Context) : RemoteViewsService.Remo
     override fun onCreate() {}
 
     override fun onDataSetChanged() {
-        items = WidgetCache.load(context)
+        items = WidgetCache.load(context).filter { isInstalled(it.packageName) }
     }
+
+    private fun isInstalled(pkg: String): Boolean {
+        if (pkg.isBlank()) return false
+        return runCatching { context.packageManager.getPackageInfo(pkg, 0) }.isSuccess
+    }
+
+    private fun iconOf(pkg: String): android.graphics.Bitmap? = runCatching {
+        val d = context.packageManager.getApplicationIcon(pkg)
+        val w = if (d.intrinsicWidth > 0) d.intrinsicWidth else 96
+        val h = if (d.intrinsicHeight > 0) d.intrinsicHeight else 96
+        val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bmp)
+        d.setBounds(0, 0, canvas.width, canvas.height)
+        d.draw(canvas)
+        bmp
+    }.getOrNull()
 
     override fun onDestroy() {}
 
@@ -29,49 +45,20 @@ class StoreWidgetFactory(private val context: Context) : RemoteViewsService.Remo
         val views = RemoteViews(context.packageName, R.layout.widget_item)
         views.setTextViewText(R.id.item_name, item.name)
 
-        val label = when (item.state) {
-            "NOT_INSTALLED" -> "未インストール"
-            "UPDATE_AVAILABLE" -> "更新あり"
-            "UP_TO_DATE" -> "最新"
-            "NO_RELEASE" -> "配布なし"
-            else -> "不明"
-        }
-        val sub = buildString {
-            append(label)
-            if (item.status.isNotBlank()) append(" ・ ").append(item.status)
-            if (item.memo.isNotBlank()) append(" ・ ").append(item.memo)
-        }
-        views.setTextViewText(R.id.item_sub, sub)
-
-        val installed = item.state == "UPDATE_AVAILABLE" || item.state == "UP_TO_DATE"
-        views.setViewVisibility(R.id.item_open, if (installed) android.view.View.VISIBLE else android.view.View.GONE)
-
-        val actionLabel = when (item.state) {
-            "NOT_INSTALLED" -> "インストール"
-            "UPDATE_AVAILABLE" -> "更新"
-            else -> ""
-        }
-        if (actionLabel.isBlank()) {
-            views.setViewVisibility(R.id.item_action, android.view.View.GONE)
+        val icon = iconOf(item.packageName)
+        if (icon != null) {
+            views.setImageViewBitmap(R.id.item_icon, icon)
         } else {
-            views.setViewVisibility(R.id.item_action, android.view.View.VISIBLE)
-            views.setTextViewText(R.id.item_action, actionLabel)
-            views.setOnClickFillInIntent(
-                R.id.item_action,
-                Intent()
-                    .putExtra(StoreWidget.EXTRA_APP_ID, item.id)
-                    .putExtra(StoreWidget.EXTRA_PKG, item.packageName)
-                    .putExtra(StoreWidget.EXTRA_KIND, "install")
-            )
+            views.setImageViewResource(R.id.item_icon, R.mipmap.ic_launcher)
         }
 
-        views.setOnClickFillInIntent(
-            R.id.item_open,
-            Intent()
-                .putExtra(StoreWidget.EXTRA_APP_ID, item.id)
-                .putExtra(StoreWidget.EXTRA_PKG, item.packageName)
-                .putExtra(StoreWidget.EXTRA_KIND, "open")
-        )
+        val fill = Intent()
+            .putExtra(StoreWidget.EXTRA_APP_ID, item.id)
+            .putExtra(StoreWidget.EXTRA_PKG, item.packageName)
+            .putExtra(StoreWidget.EXTRA_KIND, "open")
+        views.setOnClickFillInIntent(R.id.item_open, fill)
+        views.setOnClickFillInIntent(R.id.item_name, fill)
+        views.setOnClickFillInIntent(R.id.item_icon, fill)
         return views
     }
 

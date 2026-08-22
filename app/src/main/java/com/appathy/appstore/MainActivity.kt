@@ -86,6 +86,7 @@ fun StoreScreen() {
     var showOrder by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var showDiag by remember { mutableStateOf(false) }
+    var showOpen by remember { mutableStateOf(Settings.showOpenButton(context)) }
     var diagText by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     var bulk by remember { mutableStateOf("") }
@@ -248,6 +249,13 @@ fun StoreScreen() {
                                 text = { Text("履歴") },
                                 onClick = { menu = false; showHistory = true })
                             androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(if (showOpen) "「開く」ボタンを隠す" else "「開く」ボタンを表示") },
+                                onClick = {
+                                    menu = false
+                                    showOpen = !showOpen
+                                    Settings.setShowOpenButton(context, showOpen)
+                                })
+                            androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("Release診断（報告用）") },
                                 onClick = { menu = false; showDiag = true })
                             androidx.compose.material3.DropdownMenuItem(
@@ -289,6 +297,14 @@ fun StoreScreen() {
                         state = states[a.id] ?: InstallState.UNKNOWN,
                         latest = latest[a.id],
                         busy = busy[a.id] == true,
+                        showOpen = showOpen,
+                        onOpen = {
+                            val pkg = Catalog.installedPackage(context, a)?.packageName
+                            val launch = if (pkg == null) null
+                                else context.packageManager.getLaunchIntentForPackage(pkg)
+                            if (launch != null) context.startActivity(launch)
+                            else toast("${a.name}: 起動できません")
+                        },
                         onReinstall = {
                             InstallLog.forget(context, a.id)
                             states[a.id] = InstallState.UPDATE_AVAILABLE
@@ -714,6 +730,8 @@ fun AppRow(
     busy: Boolean,
     onInstall: () -> Unit,
     onReinstall: () -> Unit = {},
+    onOpen: () -> Unit = {},
+    showOpen: Boolean = false,
 ) {
     Card(Modifier.fillMaxWidth()) {
         Row(

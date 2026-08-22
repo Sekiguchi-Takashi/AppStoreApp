@@ -38,7 +38,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:gravity="center"
-        android:text="ストアを一度開いてください"
+        android:text="ストアを開いて一覧を読み込むと表示されます"
         android:textColor="#AAAAAA"
         android:textSize="14sp" />
 
