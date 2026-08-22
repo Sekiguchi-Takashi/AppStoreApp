@@ -17,14 +17,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -92,7 +90,6 @@ fun StoreScreen() {
     var bulk by remember { mutableStateOf("") }
     var conflict by remember { mutableStateOf<Triple<StoreApp, LatestRelease, String>?>(null) }
     var resumeInstall by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var category by remember { mutableStateOf("すべて") }
     val latest = remember { mutableStateMapOf<String, LatestRelease?>() }
     val states = remember { mutableStateMapOf<String, InstallState>() }
     val busy = remember { mutableStateMapOf<String, Boolean>() }
@@ -268,15 +265,6 @@ fun StoreScreen() {
         }
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
-            val cats = listOf("すべて") + apps.map { it.category }.distinct().sorted()
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(horizontal = 12.dp)
-            ) {
-                items(cats) { c ->
-                    FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c) })
-                }
-            }
             if (bulk.isNotBlank()) {
                 Text(bulk, Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                      style = MaterialTheme.typography.bodySmall)
@@ -286,7 +274,7 @@ fun StoreScreen() {
                     CircularProgressIndicator()
                 }
             }
-            val shown = apps.filter { category == "すべて" || it.category == category }
+            val shown = apps
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(12.dp)
